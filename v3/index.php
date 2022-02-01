@@ -6,6 +6,7 @@ require('day_functions.php');
 require('namedays.php');
 
 //Set up defaults
+$api_version = '3.1.1';
 $startyear = date('Y');
 $endyear = date('Y');
 $startmonth = '01';
@@ -68,17 +69,18 @@ $startunixdate = mktime(0, 0, 0, $startmonth, $startday, $startyear);
 $endunixdate = mktime(0, 0, 0, $endmonth, $endday, $endyear);
 
 $output['_timestamp'] = time();
-$output['api version'] = 'v3.1.0';
+$output['api version'] = 'v' . $api_version;
 $output['uri'] = $_SERVER['REQUEST_URI'];
 $output['startdatum'] = date('Y-m-d', $startunixdate);
 $output['slutdatum'] = date('Y-m-d', $endunixdate);
-$output['contributors']['developers'] = ['https://dryg.net/', 'https://github.com/Lavve/'];
-$output['contributors']['namnsdagar'] = 'https://dagensnamnsdag.com/';
+$output['skottår'] = date('L', $startunixdate) ? true : false;
 
 //Time to loop it!
 $number_of_days = 0;
 $number_of_workfree = 0;
 $number_of_work = 0;
+$number_of_reddays = 0;
+$number_of_weekdays = [];
 $squeeze_days = array();
 $squeeze_days['totalt antal'] = 0;
 
@@ -98,19 +100,23 @@ while ($loopdate <= $endunixdate) {
     list($type, $day, $workfree_holiday, $redday_holiday) = $type_and_day;
     $output['dagar'][$number_of_days][$type] = $day;
     
-    if ($workfree === true || $workfree_holiday === true){
+    if ($workfree || $workfree_holiday){
       $workfree = true;  
     }
     
-    if ($redday === true || $redday_holiday === true){
+    if ($redday || $redday_holiday){
       $redday = true;
     }
     
     $output['dagar'][$number_of_days]['arbetsfri dag'] = $workfree;
     $output['dagar'][$number_of_days]['röd dag'] = $redday;
   }
+
+  if ($redday) {
+    $number_of_reddays++;
+  }
   
-  if ($workfree === true) {
+  if ($workfree) {
     $number_of_workfree++;
   } else {
     $number_of_work++;
@@ -131,6 +137,12 @@ while ($loopdate <= $endunixdate) {
   if ($names = get_nameday($loopdate)){
     $output['dagar'][$number_of_days]['namnsdag'] = $names;
   }
+
+  if (array_key_exists($weekday, $number_of_weekdays)) {
+    $number_of_weekdays[$weekday]++;
+  } else {
+    $number_of_weekdays[$weekday] = 1;
+  }
   
   //Keep this last in the loop please!
   $loopdate = strtotime('+1 day', $loopdate);
@@ -148,11 +160,21 @@ function count_names ($dagar) {
   return $number_of_names;
 }
 
+$output['contributors']['developers'] = [
+  'dryg.net' => 'https://dryg.net/',
+  'Lavve' => 'https://github.com/Lavve/'
+];
+$output['contributors']['other'] = [
+  'Dagens namnsdag' => 'https://dagensnamnsdag.com/'
+];
+
 //Store statistics
 if (isset($_GET['statistik'])){
   $output['statistik']['antal dagar'] = $number_of_days;
   $output['statistik']['arbetsfria dagar'] = $number_of_workfree;
   $output['statistik']['arbetsdagar'] = $number_of_work;
+  $output['statistik']['röda dagar'] = $number_of_reddays;
+  $output['statistik']['antal veckodagar'] = $number_of_weekdays;
   $output['statistik']['klämdagar'] = $squeeze_days;
   $output['statistik']['antal namnsdagar'] = count_names($output['dagar']);
 }
